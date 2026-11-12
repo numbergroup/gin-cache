@@ -1,0 +1,61 @@
+package cache
+
+import (
+	"bytes"
+	"crypto/sha1"
+	"fmt"
+	"io"
+	"strings"
+	"testing"
+)
+
+func BenchmarkGenerateCacheKey_Short(b *testing.B) {
+	b.ReportAllocs()
+	key := "/api/v1/resource?id=123"
+	for b.Loop() {
+		_ = generateCacheKey("prefix", key)
+	}
+}
+
+func BenchmarkGenerateCacheKey_Long(b *testing.B) {
+	b.ReportAllocs()
+	longKey := "/api/v1/resource?" + generateLongQuery(1000)
+	for b.Loop() {
+		_ = generateCacheKey("prefix", longKey)
+	}
+}
+
+func generateLongQuery(n int) string {
+	var builder strings.Builder
+	for i := range n {
+		fmt.Fprintf(&builder, "k%d=v%d&", i, i)
+	}
+	return builder.String()
+}
+
+func BenchmarkGenerateURLEscapeKey_Short(b *testing.B) {
+	b.ReportAllocs()
+	key := "/api/v1/resource?id=123"
+	for b.Loop() {
+		_ = urlEscape("prefix", key)
+	}
+}
+
+func BenchmarkGenerateURLEscapeKey_Long(b *testing.B) {
+	b.ReportAllocs()
+	longKey := "/api/v1/resource?" + generateLongQuery(1000)
+	for b.Loop() {
+		_ = urlEscape("prefix", longKey)
+	}
+}
+
+func urlEscape(prefix, u string) string {
+	h := sha1.New()
+	_, _ = io.WriteString(h, u)
+	key := string(h.Sum(nil))
+	var buffer bytes.Buffer
+	buffer.WriteString(prefix)
+	buffer.WriteString(":")
+	buffer.WriteString(key)
+	return buffer.String()
+}

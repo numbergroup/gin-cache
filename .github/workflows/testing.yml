@@ -1,0 +1,73 @@
+name: Lint and Testing
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: '0 0 * * *'  # Run daily at midnight UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    strategy:
+      matrix:
+        go: ["1.26", "1.27"]
+    runs-on: ubuntu-latest
+    name: lint @ Go ${{ matrix.go }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.sum
+            go.tools.sum
+      - name: Run lint
+        run: make install-tools lint
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go: ["1.26", "1.27"]
+    name: ${{ matrix.os }} @ Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      GO111MODULE: on
+      GOPROXY: https://proxy.golang.org
+    steps:
+      - uses: niden/actions-memcached@v8
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          check-latest: true
+
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Run Tests
+        run: |
+          make test
+          go test -bench=. -benchmem -run=^$ ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.txt
+          flags: ${{ matrix.os }},go-${{ matrix.go }}
